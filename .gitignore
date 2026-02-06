@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent collaboration
+.context/
+
+# Reports (generated output)
+reports/*/report.html
+reports/*/figures/
+reports/*/data/
+
+# Download state (cursor files for resumable downloads)
+data/.cursors/
+
+# Environment
+.env
