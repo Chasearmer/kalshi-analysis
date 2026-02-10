@@ -25,6 +25,8 @@ dev = [
 
 [project.scripts]
 kalshi-download = "download.cli:main"
+kalshi-analysis = "analysis.run_round_01:main"
+kalshi-analysis-r2 = "analysis.run_round_02:main"
 
 [build-system]
 requires = ["hatchling"]
