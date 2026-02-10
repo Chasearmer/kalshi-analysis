@@ -1,0 +1,279 @@
+---
+title: "Round 2: Systematic Bias Mapping"
+subtitle: "Kalshi Trading Strategy Discovery"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    self-contained: true
+    theme: cosmo
+---
+
+## Executive Summary
+
+This report maps systematic biases across Kalshi's prediction markets, extending
+Round 1's landscape analysis into category-level, directional, temporal, and
+structural dimensions. Key findings:
+
+- **YES/NO asymmetry confirmed:** NO-takers win 53.4% vs YES-takers 39.7% (+13.7pp gap, z=23,867). This is the single largest bias discovered so far and suggests a structural NO-side advantage.
+- **Category calibration varies 15x:** Financials markets are best calibrated (0.87pp error) while Elections are worst (12.90pp). Economics shows the strongest longshot bias (-4.7pp at 5c).
+- **Temporal patterns are significant but small:** Hour-of-day and day-of-week both show statistically significant variation (~1pp range), but the absolute edge is modest. Best conditions: Sunday evenings (21:00 ET).
+- **Fee structure matters:** Markets with maker fees (`quadratic_with_maker_fees`) show 2.4x better calibration (1.38pp vs 3.38pp) and a 3pp higher taker win rate than standard `quadratic` fee markets.
+- **Quarterly trend improving:** Taker excess return has been improving over time (r=0.64), suggesting the market is becoming more efficient as it matures.
+
+---
+
+## Research Plan
+
+### Research Questions
+
+Round 2 investigates five dimensions of systematic bias, motivated by Round 1's
+discovery of the longshot bias and maker-taker gap:
+
+1. **Does longshot bias vary by category?** Are some market types (Sports, Finance, Elections) systematically more or less miscalibrated?
+2. **Is there a YES/NO directional asymmetry?** Do NO-takers outperform YES-takers at equivalent prices?
+3. **Do returns vary by time of day?** Are there exploitable intraday patterns?
+4. **Do returns vary by day of week or season?** Are there weekly or quarterly patterns?
+5. **Does fee structure affect market efficiency?** Do maker-fee markets show different calibration than standard fee markets?
+
+### Experiments
+
+| Question | Analysis Module | Method |
+|----------|----------------|--------|
+| Category calibration | `category_calibration.py` | 4-CTE chain (trades-markets-events) with prefix fallback; bin by taker price per category; compute calibration error per category |
+| YES/NO asymmetry | `yes_no_asymmetry.py` | Split trade outcomes by `taker_side`; bin each side by price; per-bin z-tests with Bonferroni correction |
+| Time-of-day | `time_of_day.py` | Extract hour from `created_time` in Eastern Time; compute contract-weighted win rates per hour; chi-squared independence test |
+| Day-of-week | `day_of_week.py` | Extract day and quarter; chi-squared test; correlation trend analysis on quarterly excess returns |
+| Fee structure | `fee_structure.py` | 4-way join (trades-markets-events-series) to get `fee_type`; calibration curves per fee type |
+
+### Infrastructure Extended
+
+| Module | Changes |
+|--------|---------|
+| `src/util/queries.py` | Added `taker_side` to `trade_outcomes_sql`; new `categorized_trade_outcomes_sql()` and `with_fee_type_sql()` CTE builders |
+| `src/util/stats.py` | Added `chi_squared_independence()` and `bonferroni_correct()` |
+
+**Test coverage:** 101 tests across 10 test files, all passing (29 new tests for Round 2).
+
+---
+
+## 1. Longshot Bias by Category
+
+The calibration curve from Round 1 showed an overall longshot bias. Here we decompose
+it across the top 8 categories by volume.
+
+### Calibration Error by Category
+
+| Category | Cal. Error (pp) | Longshot Excess (5c) | Volume |
+|----------|----------------:|---------------------:|-------:|
+| Financials | 0.87 | -0.8pp | 596M |
+| Crypto | 1.34 | -1.6pp | 1.48B |
+| Sports | 1.45 | -2.3pp | 30.2B |
+| Climate & Weather | 2.47 | -3.8pp | 460M |
+| Entertainment | 2.87 | -3.5pp | 399M |
+| Politics | 4.61 | -4.1pp | 1.22B |
+| Economics | 5.76 | -4.7pp | 585M |
+| Elections | 12.90 | -3.6pp | 1.17B |
+
+![Calibration curves per category](figures/category_calibration_grid.png)
+
+![Excess return heatmap across categories and price bins](figures/category_excess_return_heatmap.png)
+
+**Key findings:**
+
+- **Financials** markets are the best calibrated across the platform (0.87pp), with
+  excess returns close to zero at almost every price level. This likely reflects
+  more sophisticated participants in financial markets.
+- **Elections** markets are dramatically miscalibrated (12.90pp), with extreme
+  deviations at the 40-50c range (-39pp at 45c, +33pp at 55c). This suggests
+  strong directional biases in political betting — likely YES-biased retail
+  participants overbuying their preferred candidate.
+- **Economics** has the strongest longshot bias at 5c (-4.7pp) and shows a
+  distinctive "reverse S" pattern: takers systematically lose on cheap contracts
+  but gain on expensive ones (70c: +8.4pp, 80c: +9.1pp).
+- **Sports** (82% of volume) has moderate calibration error (1.45pp) consistent
+  with the platform-wide average, as expected given its volume dominance.
+
+---
+
+## 2. YES/NO Asymmetry
+
+Each trade has a `taker_side` — the taker either buys YES or NO. This analysis
+tests whether NO-takers systematically outperform YES-takers.
+
+### Win Rates by Taker Side and Price Bin
+
+| Price | YES WR | YES Excess | NO WR | NO Excess | Gap (NO - YES) |
+|------:|-------:|-----------:|------:|----------:|---------------:|
+| 5c | 2.3% | -2.7pp | 2.5% | -2.5pp | +0.2pp |
+| 15c | 12.4% | -2.6pp | 12.7% | -2.3pp | +0.3pp |
+| 25c | 24.4% | -0.6pp | 24.1% | -0.9pp | -0.4pp |
+| 35c | 34.8% | -0.2pp | 34.5% | -0.5pp | -0.3pp |
+| 45c | 42.3% | -2.7pp | 43.6% | -1.4pp | +1.4pp |
+| 55c | 53.9% | -1.1pp | 55.1% | +0.1pp | +1.2pp |
+| 65c | 61.5% | -3.5pp | 64.5% | -0.5pp | +3.0pp |
+| 75c | 73.4% | -1.6pp | 74.3% | -0.7pp | +0.9pp |
+| 85c | 84.1% | -0.9pp | 85.2% | +0.2pp | +1.1pp |
+| 95c | 95.0% | -0.0pp | 96.1% | +1.1pp | +1.1pp |
+
+**Overall: YES-taker WR 39.7% vs NO-taker WR 53.4% (gap: +13.7pp, z=23,867, p<10^-300)**
+
+![YES vs NO taker calibration curves](figures/yes_no_calibration.png)
+
+![Excess return comparison by price bin](figures/yes_no_excess_return.png)
+
+**Key findings:**
+
+- **NO-takers outperform YES-takers at nearly every price level.** The gap is
+  largest at 65c (+3.0pp), suggesting that YES-takers buying favorites at high
+  prices are systematically overpaying.
+- The overall 13.7pp gap is enormous and highly significant. However, some of
+  this reflects *composition* — YES-takers are concentrated at low prices (5.5B
+  contracts at 5c) while NO-takers are more evenly distributed.
+- At the 55c bin, NO-takers are the only group with positive excess return
+  (+0.1pp), while YES-takers are negative (-1.1pp). This asymmetry around fair
+  value suggests directional retail bias toward YES.
+- **Strategy implication:** "Fade YES at high prices" appears to be a robust
+  structural edge. At 95c, NO-takers earn +1.1pp excess while YES-takers earn
+  exactly 0pp.
+
+---
+
+## 3. Time-of-Day Effects
+
+### Intraday Returns (Eastern Time)
+
+![Taker and maker excess return by hour of day](figures/time_of_day_returns.png)
+
+![Trading volume by hour](figures/time_of_day_volume.png)
+
+**Chi-squared test:** chi2 = 38,076,736, p < 10^-300 (dof=23). Taker win rate is
+**highly significantly** dependent on hour. However, the absolute magnitude is modest.
+
+| Metric | Value |
+|--------|-------|
+| Best hour for takers | 21:00 ET (excess -0.42pp) |
+| Worst hour for takers | 3:00 ET (excess -1.41pp) |
+| Range | ~1.0pp |
+| Peak volume hour | 21:00 ET (3.4B contracts) |
+| Lowest volume hour | 4:00 ET (144M contracts) |
+
+**Key findings:**
+
+- **Evening trading (20:00-22:00 ET) is most favorable for takers,** with the
+  smallest negative excess returns. This coincides with peak sports trading
+  volume (live games), where prices may be more efficient due to high liquidity.
+- **Overnight/early morning (1:00-5:00 ET) is worst for takers,** with excess
+  returns around -1.0 to -1.4pp. Low-volume hours attract less price competition.
+- The ~1pp intraday range suggests modest but potentially exploitable timing effects.
+- Volume follows a bimodal pattern: a daytime hump (8:00-17:00) and an evening
+  peak (19:00-22:00), reflecting market hours and live sports.
+
+---
+
+## 4. Day-of-Week and Seasonality
+
+### Day-of-Week Returns
+
+![Excess return by day of week](figures/day_of_week_returns.png)
+
+**Chi-squared test:** chi2 = 3,554,780, p < 10^-300 (dof=6). Day-of-week
+significantly affects taker returns.
+
+| Day | Taker Excess | Maker Excess | Contracts |
+|-----|-------------:|-------------:|----------:|
+| Sunday | -0.52pp | +0.52pp | 7.8B |
+| Monday | -0.93pp | +0.93pp | 4.2B |
+| Tuesday | -0.72pp | +0.72pp | 4.1B |
+| Wednesday | -0.82pp | +0.82pp | 4.3B |
+| Thursday | -1.04pp | +1.04pp | 4.8B |
+| Friday | -1.01pp | +1.01pp | 4.5B |
+| Saturday | -0.67pp | +0.67pp | 7.0B |
+
+**Key findings:**
+
+- **Weekends are best for takers** (Sunday: -0.52pp, Saturday: -0.67pp), likely
+  because high-volume sports markets on weekends attract more balanced participation.
+- **Thursday/Friday are worst** (-1.04pp, -1.01pp), possibly reflecting weekday
+  retail trading patterns in non-sports categories.
+- The ~0.5pp day-of-week spread is smaller than the hour-of-day range but consistent.
+
+### Quarterly Seasonality
+
+![Quarterly excess return trend](figures/seasonality_returns.png)
+
+**Quarterly trend:** Taker excess return shows an **improving trend** (r=0.64).
+Early quarters (2021-2023) showed taker-positive excess (+1-3pp, reflecting a
+small, possibly inefficient market), while recent quarters (2025-2026) show
+taker-negative excess (-0.6 to -1.2pp), consistent with growing maker
+sophistication and volume.
+
+---
+
+## 5. Fee Structure Analysis
+
+Kalshi uses three fee regimes: `quadratic` (standard), `quadratic_with_maker_fees`
+(maker also pays fees), and `unknown` (markets without matched series metadata).
+
+### Calibration by Fee Type
+
+| Fee Type | Cal. Error | Taker WR | Maker WR | Contracts |
+|----------|----------:|----------:|----------:|----------:|
+| quadratic | 3.38pp | 43.7% | 56.3% | 15.9B |
+| quadratic_with_maker_fees | 1.38pp | 46.7% | 53.3% | 51.6B |
+| unknown | 3.33pp | 15.7% | 84.4% | 2.8B |
+
+![Calibration curves by fee type](figures/fee_calibration_by_type.png)
+
+![Excess return comparison by fee type](figures/fee_excess_return_comparison.png)
+
+**Key findings:**
+
+- **Maker-fee markets are 2.4x better calibrated** (1.38pp vs 3.38pp) and show a
+  3pp higher taker win rate. This makes economic sense: when makers also pay fees,
+  the spread they demand doesn't need to be as wide to cover costs, leading to
+  tighter, more efficient pricing.
+- The `quadratic` markets show a stark anomaly at 40-50c: taker WR drops to 34.7%
+  at 45c but jumps to 61.4% at 55c. This bimodal pattern suggests a concentration
+  of binary-outcome directional markets (like Elections) in this fee category.
+- The `unknown` fee type (markets without series metadata) shows extreme maker
+  dominance (84.4% WR), likely because these are orphan MVE sports markets with
+  automated market-making.
+
+---
+
+## 6. Next Steps (Round 3)
+
+Based on Round 2's findings, the strongest strategy candidates for Round 3
+prototyping are:
+
+1. **"Fade YES at high prices"** — The YES/NO asymmetry is the largest bias found
+   (13.7pp). A strategy that systematically takes the NO side at prices above 60c
+   should be estimated for edge and capacity.
+2. **Category-specific contrarian strategies** — Economics and Elections show large,
+   exploitable miscalibrations. Economics' reverse-S pattern (longshot bias + favorite
+   underpayment) could support both directions.
+3. **Time-based entry optimization** — Trading during evening hours (21:00 ET) on
+   weekends (Sunday) captures the best conditions, with ~0.5-1pp better taker returns
+   than worst conditions.
+4. **Fee-type filtering** — Focusing on `quadratic_with_maker_fees` markets reduces
+   the maker edge from 12.6pp to 6.7pp, improving strategy viability.
+5. **Market-close-proximity strategies** — Investigate whether prices converge more
+   accurately near settlement, where the economics vs elections miscalibrations
+   might offer the clearest signals.
+
+---
+
+## Appendix: Methodology
+
+- **Data source:** Complete Kalshi API historical dump (30M markets, 173M trades)
+- **Price fields:** Using `_dollars` fixed-point string fields, converted to cents
+- **Win rate calculation:** Contract-weighted: `SUM(won * contracts) / SUM(contracts)`
+- **Price binning:** Equal-width deciles (0-10, 10-20, ..., 90-100)
+- **Category assignment:** Primary: events table `category`; fallback: event_ticker prefix inference
+- **Timezone:** All temporal analysis in Eastern Time (`America/New_York`), handling EDT/EST automatically
+- **Statistical tests:** Two-proportion z-test (YES/NO), chi-squared independence (temporal), Bonferroni correction for multiple comparisons
+- **Fee type source:** `series.fee_type` via trades -> markets -> events -> series join
+- **Minimum thresholds:** 1M contracts per category (calibration), 1M contracts per fee type
+- **Runtime:** ~40 seconds for all 5 analyses on 173M trades

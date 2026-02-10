@@ -271,7 +271,33 @@ The report includes:
 - **Next steps** — what to explore in the next round
 - **Appendix** — methodology details, code references
 
-### 5.3 Research Roadmap (Suggested Order)
+### 5.3 Engineering Standards & Code Quality
+
+The domain we are operating in — quantitative trading strategy discovery — demands an exceptionally high level of certainty in both code correctness and analytical results. A subtle bug in a data pipeline, a misjoined table, an off-by-one in a time window, or an incorrect fee calculation can silently produce misleading findings that look like profitable strategies but are actually artifacts. Worse, acting on flawed analysis means real capital at risk.
+
+**All internal infrastructure and experiments must be built with best practices and comprehensive testing:**
+
+- **Unit tests for all shared utilities and infrastructure.** Every query helper, fee calculator, statistical function, data loader, and transformation must have tests covering expected behavior, edge cases, and known failure modes. Use pytest with clear, descriptive test names.
+- **Integration tests for data pipelines.** Verify that downloaded data round-trips correctly through storage and query layers. Test with known fixtures — small synthetic datasets with hand-calculated expected outputs — so that any regression is immediately caught.
+- **Validation checks in analysis code.** Every analysis script should include sanity checks: row counts match expectations, no unexpected NULLs in join keys, price values fall within valid ranges (0–100 for binary markets), and trade timestamps are monotonically increasing within each market. Assert these conditions explicitly rather than assuming them.
+- **Reproducibility.** All analysis must be deterministic and reproducible. Pin random seeds, record DuckDB and library versions, and ensure that re-running an analysis on the same data produces identical results.
+- **Code review mindset.** Treat every analysis as if it will be audited. Prefer clarity over cleverness. Name variables precisely. Document non-obvious SQL joins and filtering logic inline. If a query produces surprising results, investigate before reporting — the surprise is more likely a bug than an alpha signal.
+
+Errors in this domain are not just engineering failures — they are financial risk. The testing and validation bar must reflect that.
+
+### 5.4 Shared Infrastructure & Documentation
+
+Many experiments across research rounds will require building and reusing shared infrastructure: data loaders, query helpers, fee models, statistical test wrappers, category taxonomies, report generation utilities, and simulation components. These shared utilities form the foundation that all analysis builds on, so they must be treated as first-class production code.
+
+**Guidelines for shared infrastructure:**
+
+- **Document architectural decisions.** When adding or modifying shared utilities, document the *why* — what problem does this solve, what alternatives were considered, and what tradeoffs were made. Use inline comments for non-obvious logic and module-level docstrings for purpose and usage patterns.
+- **Maintain a living architecture record.** As the codebase grows across research rounds, keep documentation current for how modules relate to each other, what data flows through which pipelines, and how to extend existing infrastructure for new experiment types. Stale documentation is worse than no documentation — it actively misleads.
+- **Design for composability.** Shared utilities should have clear interfaces, minimal coupling, and well-defined inputs/outputs. An analysis script from Round 4 should be able to use the same fee calculator and query helpers that were built in Round 1 without modification.
+- **Version and changelog shared components.** When a shared utility changes behavior (e.g., a fee model is updated to handle a new fee type), document the change and verify that existing analyses that depend on it are not silently broken. Run the full test suite before and after any infrastructure change.
+- **Centralize domain knowledge.** Encode Kalshi-specific domain knowledge (fee structures, market status lifecycles, settlement semantics, the category taxonomy) in well-tested shared modules rather than scattering ad-hoc implementations across individual analysis scripts.
+
+### 5.5 Research Roadmap (Suggested Order)
 
 **Round 1 — Landscape & Calibration:**
 - Dataset summary statistics (market count, trade count, volume by category, time range)

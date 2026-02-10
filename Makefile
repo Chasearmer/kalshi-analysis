@@ -1,4 +1,4 @@
-.PHONY: install download download-series download-events download-markets download-trades test lint
+.PHONY: install download download-series download-events download-markets download-trades test lint analysis analysis-r2 report report-r2
 
 install:
 	uv sync --all-extras
@@ -28,3 +28,15 @@ lint:
 format:
 	uv run ruff check --fix src/ tests/
 	uv run ruff format src/ tests/
+
+analysis:
+	uv run python -m analysis.run_round_01
+
+analysis-r2:
+	uv run python -m analysis.run_round_02
+
+report:
+	cd reports/round_01 && quarto render report.qmd
+
+report-r2:
+	cd reports/round_02 && quarto render report.qmd

@@ -1,0 +1,194 @@
+---
+title: "Round 1: Landscape & Calibration"
+subtitle: "Kalshi Trading Strategy Discovery"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    self-contained: true
+    theme: cosmo
+---
+
+## Executive Summary
+
+This report presents the first round of analysis on the complete Kalshi historical dataset.
+Key findings:
+
+- **Longshot bias confirmed:** Takers buying at 5c win only 2.4% vs implied 5% (-2.6pp excess return)
+- **Maker advantage:** Passive liquidity providers outperform takers by +12.77pp overall (56.4% vs 43.6%)
+- **Sports dominance:** Sports markets account for 82% of all platform volume ($30.2B)
+- **Rapid growth:** Platform volume grew from near-zero to ~$1.5B/month by early 2026
+- **Overall calibration error:** 1.55pp weighted across 36.6 billion contracts
+
+---
+
+## Research Plan
+
+### Research Questions
+
+This first round establishes the empirical landscape before deeper investigation. The questions are informed by prior prediction market research (see PROJECT_SEED.md, Section 3) and the Round 1 roadmap (Section 5.5):
+
+1. **How well calibrated are Kalshi contract prices?** Do actual win rates match implied probabilities across the price spectrum, or are there systematic deviations (e.g., longshot bias)?
+2. **How do maker and taker win rates compare?** Is there a measurable performance gap between passive liquidity providers and aggressive order initiators, and how does it vary by price level?
+3. **How is trading volume distributed across market categories?** Which categories dominate, and how concentrated is activity?
+4. **How has platform volume evolved over time?** What does the growth trajectory look like, and which categories are driving it?
+
+### Experiments
+
+| Question | Analysis Module | Method |
+|----------|----------------|--------|
+| Calibration accuracy | `calibration.py` | Bin trades by taker price into 10 deciles; compute contract-weighted win rate per bin; compare to implied probability (bin midpoint) |
+| Maker vs. taker performance | `maker_taker.py` | Decompose each trade into taker and maker sides; bin each side by its own price; two-proportion z-test on overall win rates |
+| Volume distribution | `summary.py`, `volume.py` | 3-way join (trades-markets-events) with prefix-based category fallback for orphan markets; aggregate volume by category and by month |
+| Platform growth | `volume.py` | Monthly volume time series, stacked by top-5 categories |
+
+### Infrastructure Built
+
+All shared infrastructure was built from scratch in this round to support current and future analyses:
+
+| Module | Purpose |
+|--------|---------|
+| `src/util/queries.py` | DuckDB SQL building blocks: `get_connection()`, `resolved_markets_sql()`, `trade_outcomes_sql()`, `with_category_sql()`, `build_query()`. Composable CTEs that handle the full join path from raw trades to categorized outcomes. |
+| `src/util/categories.py` | Category taxonomy mapping 20+ event_ticker prefixes to 17 canonical categories. Provides both Python-side lookup (`infer_category()`) and inline SQL (`category_case_sql()`). Handles the 82%-by-count orphan MVE markets that lack event table matches. |
+| `src/util/stats.py` | Statistical helpers: `weighted_mean()`, `excess_return()`, `calibration_error()`, `two_proportion_z_test()`. |
+| `src/analysis/base.py` | `AnalysisResult` dataclass, output directory management, and validation checks (price ranges, null detection, row count sanity). |
+| `src/analysis/run_round_01.py` | Click CLI orchestrator that runs all 4 analyses sequentially and reports results. |
+
+**Test coverage:** 72 unit tests across 4 test files (`test_queries.py`, `test_categories.py`, `test_stats.py`, `test_analysis_base.py`), all passing. Tests use synthetic Parquet fixtures with hand-calculated expected values.
+
+### Subagent Strategy
+
+Round 1 was executed by a single agent working sequentially through five phases:
+
+1. **Exploration** — 3 parallel subagents surveyed the codebase structure, data schemas, and existing patterns
+2. **Planning** — 1 planning subagent designed the full implementation across 14 files
+3. **Utilities** — Built and smoke-tested all shared infrastructure against real data
+4. **Tests** — Wrote 72 unit tests with synthetic fixtures; caught and fixed a prefix-ordering bug (KXMVEMENTIONS must precede KXMVEMENT for correct category matching)
+5. **Analysis & Report** — Built 4 analysis modules, ran on full dataset (~50 seconds), generated all figures and CSVs, assembled Quarto report
+
+---
+
+## 1. Dataset Overview
+
+The dataset spans **2021-06-30 to 2026-02-06** and contains:
+
+- **30,222,959** markets (28,877,609 finalized)
+- **173,227,171** trades
+- **145,849** events across **16,716** series
+
+### Volume by Category
+
+| Category | Markets | Total Volume | % of Volume |
+|----------|--------:|-------------:|------------:|
+| Sports | 23,753,639 | 30,169,691,898 | 82.4% |
+| Crypto | 2,763,760 | 1,476,463,424 | 4.0% |
+| Politics | 14,116 | 1,221,032,278 | 3.3% |
+| Elections | 1,673 | 1,166,252,529 | 3.2% |
+| Financials | 1,981,568 | 595,442,163 | 1.6% |
+| Economics | 7,151 | 585,301,509 | 1.6% |
+| Climate & Weather | 54,771 | 460,350,789 | 1.3% |
+| Entertainment | 61,136 | 399,381,352 | 1.1% |
+| Mentions | 25,485 | 282,093,529 | 0.8% |
+| Other | 45,009 | 256,694,571 | 0.7% |
+
+![Dataset summary statistics](figures/dataset_overview.png)
+
+---
+
+## 2. Calibration Curve
+
+The calibration curve plots actual win rate against implied probability (price).
+Perfect calibration would follow the y=x diagonal. Deviations reveal systematic biases.
+
+### Taker Calibration by Price Decile
+
+| Price Bin | Win Rate | Implied | Excess Return | Contracts |
+|----------:|---------:|--------:|--------------:|----------:|
+| 5c | 2.4% | 5.0% | -2.6pp | 7,083M |
+| 15c | 12.5% | 15.0% | -2.5pp | 3,325M |
+| 25c | 24.4% | 25.0% | -0.6pp | 3,061M |
+| 35c | 34.7% | 35.0% | -0.3pp | 3,201M |
+| 45c | 42.6% | 45.0% | -2.4pp | 3,679M |
+| 55c | 54.2% | 55.0% | -0.8pp | 4,101M |
+| 65c | 62.4% | 65.0% | -2.6pp | 3,062M |
+| 75c | 73.7% | 75.0% | -1.3pp | 2,640M |
+| 85c | 84.5% | 85.0% | -0.5pp | 2,630M |
+| 95c | 95.6% | 95.0% | +0.6pp | 3,828M |
+
+![Calibration curve showing actual win rate vs. implied probability](figures/calibration_curve.png)
+
+**Key finding:** The longshot bias is clearly visible — contracts priced below 20c have win rates
+significantly below their implied probability, meaning takers systematically overpay for longshots.
+The only decile with positive excess return for takers is the 90-100c bin (favorites at 95c),
+where takers win 95.6% vs implied 95%.
+
+Overall weighted calibration error: **1.55 percentage points** across 36.6 billion contracts.
+
+---
+
+## 3. Volume Distribution
+
+![Volume distribution across categories and over time](figures/volume_distribution.png)
+
+Sports accounts for 82% of all volume. The platform experienced explosive growth
+starting in late 2024, with monthly volume rising from near-zero to over $1.5 billion
+by early 2026.
+
+---
+
+## 4. Maker/Taker Asymmetry
+
+Each trade has two sides: the **taker** (aggressor who crosses the spread) and the
+**maker** (passive liquidity provider). This analysis decomposes win rates by side.
+
+### Win Rates by Side and Price Bin
+
+| Price | Maker WR | Maker Excess | Taker WR | Taker Excess |
+|------:|---------:|-------------:|---------:|-------------:|
+| 5c | 4.0% | -1.0pp | 2.4% | -2.6pp |
+| 15c | 14.1% | -0.9pp | 12.5% | -2.5pp |
+| 25c | 25.4% | +0.4pp | 24.4% | -0.6pp |
+| 35c | 36.6% | +1.6pp | 34.7% | -0.3pp |
+| 45c | 44.8% | -0.2pp | 42.6% | -2.4pp |
+| 55c | 56.3% | +1.3pp | 54.2% | -0.8pp |
+| 65c | 64.4% | -0.6pp | 62.4% | -2.6pp |
+| 75c | 74.6% | -0.4pp | 73.7% | -1.3pp |
+| 85c | 86.4% | +1.4pp | 84.5% | -0.5pp |
+| 95c | 97.4% | +2.4pp | 95.6% | +0.6pp |
+
+**Overall: Maker WR 56.38% vs Taker WR 43.62% (gap: +12.77pp, z=34,542, p<10^-300)**
+
+![Maker vs. taker calibration curves](figures/maker_taker_calibration.png)
+
+![Excess return comparison by price bin](figures/maker_taker_excess.png)
+
+**Key finding:** Makers consistently outperform takers at every price level. The maker
+advantage is largest at the extremes — at 95c, makers win 97.4% (excess +2.4pp) while
+takers only win 95.6% (excess +0.6pp). This suggests retail-driven aggressive trading
+subsidizes patient liquidity providers.
+
+---
+
+## 5. Next Steps (Round 2)
+
+Based on these findings, Round 2 should investigate:
+
+1. **Longshot bias by category** — Is the bias stronger in Sports vs. Finance vs. Weather?
+2. **YES/NO asymmetry** — Do NO contracts systematically outperform YES at equivalent prices?
+3. **Time-of-day effects** — Are there exploitable intraday patterns in maker/taker returns?
+4. **Fee structure analysis** — Do different fee types (quadratic, flat, maker fees) create distortions?
+5. **Day-of-week and seasonality** — Does the maker edge vary by day of week or season?
+
+---
+
+## Appendix: Methodology
+
+- **Data source:** Complete Kalshi API historical dump (markets, trades, events, series)
+- **Price fields:** Using `_dollars` fixed-point string fields (sub-cent precision)
+- **Win rate calculation:** Contract-weighted: `SUM(won * contracts) / SUM(contracts)`
+- **Price binning:** Equal-width deciles (0-10, 10-20, ..., 90-100)
+- **Maker/taker decomposition:** Taker side from `taker_side` field; maker is the counterparty
+- **Market filtering:** Only finalized binary markets with yes/no results included
+- **Category assignment:** Primary: events table `category` field; fallback: event_ticker prefix inference
+- **Statistical test:** Two-proportion z-test for overall maker vs. taker significance
