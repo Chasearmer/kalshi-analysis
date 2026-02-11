@@ -27,6 +27,8 @@ dev = [
 kalshi-download = "download.cli:main"
 kalshi-analysis = "analysis.run_round_01:main"
 kalshi-analysis-r2 = "analysis.run_round_02:main"
+kalshi-analysis-r3 = "analysis.run_round_03:main"
+kalshi-analysis-r4 = "analysis.run_round_04:main"
 
 [build-system]
 requires = ["hatchling"]

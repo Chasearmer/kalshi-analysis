@@ -115,10 +115,99 @@ def with_fee_type_sql(data_dir: Path) -> str:
             r.volume,
             COALESCE(e.category, {case_sql.replace('event_ticker', 'r.event_ticker')}) AS category,
             COALESCE(s.fee_type, 'unknown') AS fee_type,
-            COALESCE(CAST(s.fee_multiplier AS DOUBLE), 1.0) AS fee_multiplier
+            COALESCE(s.fee_multiplier, 1.0) AS fee_multiplier
         FROM resolved_markets r
         LEFT JOIN '{data_dir}/events/*.parquet' e ON r.event_ticker = e.event_ticker
-        LEFT JOIN '{data_dir}/series/*.parquet' s ON e.series_ticker = s.ticker
+        LEFT JOIN (
+            SELECT DISTINCT ticker, fee_type, CAST(fee_multiplier AS DOUBLE) AS fee_multiplier
+            FROM '{data_dir}/series/*.parquet'
+        ) s ON e.series_ticker = s.ticker
+    """
+
+
+def trade_outcomes_with_timing_sql(data_dir: Path) -> str:
+    """SQL for a CTE adding market close_time and hours_to_close to trade outcomes.
+
+    Depends on: resolved_markets CTE.
+    Columns: ticker, taker_side, taker_price, maker_price, taker_won, maker_won,
+             contracts, created_time, close_time, hours_to_close
+
+    Only includes markets where close_time is populated.
+    hours_to_close can be negative for trades after market close but before settlement.
+    """
+    return f"""
+        SELECT
+            t.ticker,
+            t.taker_side,
+            CASE WHEN t.taker_side = 'yes'
+                 THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                 ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+            END AS taker_price,
+            CASE WHEN t.taker_side = 'yes'
+                 THEN CAST(t.no_price_dollars AS DOUBLE) * 100
+                 ELSE CAST(t.yes_price_dollars AS DOUBLE) * 100
+            END AS maker_price,
+            CASE WHEN t.taker_side = r.result THEN 1 ELSE 0 END AS taker_won,
+            CASE WHEN t.taker_side != r.result THEN 1 ELSE 0 END AS maker_won,
+            CAST(t.count_fp AS DOUBLE) AS contracts,
+            t.created_time,
+            m.close_time,
+            EXTRACT(EPOCH FROM (
+                CAST(m.close_time AS TIMESTAMP) - CAST(t.created_time AS TIMESTAMP)
+            )) / 3600.0 AS hours_to_close
+        FROM '{data_dir}/trades/*.parquet' t
+        INNER JOIN resolved_markets r ON t.ticker = r.ticker
+        INNER JOIN '{data_dir}/markets/*.parquet' m ON t.ticker = m.ticker
+        WHERE m.close_time IS NOT NULL
+    """
+
+
+def full_trade_outcomes_with_all_dims_sql(data_dir: Path) -> str:
+    """SQL CTE for trade outcomes with all filter dimensions.
+
+    Combines category, fee_type, fee_multiplier, time_bucket, price_range,
+    and close_time into a single canonical CTE for simulation queries.
+
+    Depends on: resolved_markets, markets_with_fees CTEs.
+    Columns: ticker, taker_side, taker_price, taker_won, contracts,
+             created_time, close_time, category, fee_type, fee_multiplier,
+             time_bucket, price_range
+    """
+    return f"""
+        SELECT
+            t.ticker,
+            t.taker_side,
+            CASE WHEN t.taker_side = 'yes'
+                 THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                 ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+            END AS taker_price,
+            CASE WHEN t.taker_side = mf.result THEN 1 ELSE 0 END AS taker_won,
+            CAST(t.count_fp AS DOUBLE) AS contracts,
+            t.created_time,
+            m.close_time,
+            mf.category,
+            mf.fee_type,
+            mf.fee_multiplier,
+            CASE
+                WHEN EXTRACT(HOUR FROM CAST(t.created_time AS TIMESTAMPTZ)
+                    AT TIME ZONE 'America/New_York') BETWEEN 20 AND 23
+                THEN 'evening'
+                ELSE 'other'
+            END AS time_bucket,
+            CASE
+                WHEN (CASE WHEN t.taker_side = 'yes'
+                     THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                     ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+                END) >= 60 THEN 'high_price'
+                WHEN (CASE WHEN t.taker_side = 'yes'
+                     THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                     ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+                END) <= 30 THEN 'low_price'
+                ELSE 'mid_price'
+            END AS price_range
+        FROM '{data_dir}/trades/*.parquet' t
+        INNER JOIN markets_with_fees mf ON t.ticker = mf.ticker
+        LEFT JOIN '{data_dir}/markets/*.parquet' m ON t.ticker = m.ticker
     """
 
 

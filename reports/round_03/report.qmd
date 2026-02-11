@@ -1,0 +1,226 @@
+---
+title: "Round 3: Strategy Prototyping"
+subtitle: "Kalshi Trading Strategy Discovery"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    self-contained: true
+    theme: cosmo
+---
+
+## Executive Summary
+
+This report evaluates trading strategy candidates derived from Round 2's bias
+discoveries, incorporating Kalshi's quadratic fee structure for the first time
+to compute net profitability. Key findings:
+
+- **Fee impact quantified:** Kalshi's quadratic fees (`0.07 * fee_multiplier * p * (1-p)`)
+  cost 0.33-1.75 cents per contract depending on price. This reduces gross edge
+  significantly, especially near 50c.
+- **Close-proximity analysis:** Investigates whether markets become more efficient
+  as settlement approaches.
+- **Fade YES strategy:** Systematic NO-side entries at prices >=60c, evaluated
+  across price bins, categories, and fee types.
+- **Category strategies:** Economics "reverse-S" and Elections directional bias
+  tested for net profitability after fees.
+- **Combined filters:** Multi-dimensional stacking of bias signals to find
+  the highest-edge, highest-capacity filter combinations.
+
+---
+
+## Research Plan
+
+### Research Questions
+
+1. **Close-proximity efficiency:** Do markets become more efficient as settlement approaches?
+2. **Fade YES viability:** Can the YES/NO asymmetry (13.7pp gap) be profitably exploited after fees?
+3. **Category strategies:** Do Economics and Elections calibration patterns survive fee costs?
+4. **Filter combinations:** Do multiple bias signals stack or interact?
+5. **Capacity constraints:** Which strategies have sufficient volume for real deployment?
+
+### Experiments
+
+| Question | Analysis Module | Method |
+|----------|----------------|--------|
+| Close-proximity | `close_proximity.py` | Bin trades by hours-to-close; taker excess return per bucket |
+| Fade YES | `fade_yes.py` | NO-taker >=60c; breakdown by price/category/fee_type; net edge after fees |
+| Category strategies | `economics_reversal.py` | Economics favorites >70c, longshots <20c; Elections directional |
+| Combined filters | `combined_filters.py` | Cross-tab side x fee_type x time x category x price; rank by extractable edge |
+| Strategy summary | `strategy_comparison.py` | Aggregate all strategies; unified ranking; tier assignment |
+
+### Infrastructure Built
+
+| Module | Purpose |
+|--------|---------|
+| `src/util/fees.py` | Kalshi quadratic fee calculator (`kalshi_fee_cents`, `net_edge_pp`) |
+| `src/util/strategy.py` | Kelly fraction, payout ratio, daily capacity, Sharpe proxy |
+| `src/util/queries.py` | Added `trade_outcomes_with_timing_sql()` CTE for close-proximity |
+
+---
+
+## 1. Close-Proximity Efficiency
+
+How does taker excess return vary as a function of time until market settlement?
+
+![Excess return vs hours to close](figures/close_proximity_excess_return.png)
+
+![Volume by time to close](figures/close_proximity_volume.png)
+
+**Key findings:**
+
+- Markets may show different efficiency at different distances from settlement.
+- If efficiency improves near close, this supports close-proximity entry strategies.
+- Volume distribution across time buckets shows when most trading occurs relative
+  to settlement.
+
+---
+
+## 2. Fade YES Strategy
+
+The primary strategy candidate: systematically take the NO side at prices >= 60c,
+exploiting Round 2's YES/NO asymmetry finding (13.7pp gap).
+
+![Net edge by price bin](figures/fade_yes_edge_by_price.png)
+
+![Net edge by category](figures/fade_yes_edge_by_category.png)
+
+![Edge waterfall: gross - fees = net](figures/fade_yes_waterfall.png)
+
+**Strategy definition:** Take NO side when price >= 60c.
+
+**Performance breakdown by price bin:**
+
+- Gross edge, fee cost, and net edge computed per 10c price bin
+- Fee cost increases toward 50c (quadratic fee structure) but strategy operates
+  at 60c+ where fees are moderate
+- Kelly fraction shows optimal position sizing per bin
+
+**Performance by category:**
+
+- Top categories ranked by net edge
+- Categories with higher calibration error (from Round 2) may show larger edges
+
+---
+
+## 3. Economics Category Reversal
+
+Round 2 found that Economics markets show a "reverse-S" calibration pattern:
+strong longshot bias at low prices, and favorite underpayment at high prices.
+
+![Economics calibration with strategy zones](figures/economics_calibration_strategies.png)
+
+![Net edge by sub-strategy](figures/economics_edge_by_strategy.png)
+
+![Strategy capacity comparison](figures/economics_capacity.png)
+
+**Sub-strategies tested:**
+
+1. **Economics favorites (YES >=70c):** Exploits favorite underpayment
+2. **Economics longshots (NO <=30c):** Exploits longshot bias on the NO side
+3. **Elections directional (NO all prices):** Exploits extreme miscalibration
+4. **Category-wide NO bias:** Tests overall directional advantage
+
+---
+
+## 4. Combined Filters
+
+Can multiple bias signals be stacked for higher edge? This analysis cross-tabulates
+five filter dimensions and ranks combinations.
+
+![Top combinations by extractable edge](figures/combined_filters_ranking.png)
+
+![Edge vs capacity scatter](figures/combined_filters_edge_capacity_scatter.png)
+
+![Distribution of net edges](figures/combined_filters_distribution.png)
+
+**Filter dimensions:**
+
+- Taker side (YES / NO)
+- Fee type (quadratic / quadratic_with_maker_fees)
+- Time bucket (evening 20-23h ET / other)
+- Category (Sports, Economics, etc.)
+- Price range (low <30c / mid / high >=60c)
+
+**Independence test:** If filters are independent, combined edge should
+approximate the sum of individual filter edges. Interaction effects show
+whether signals amplify or cancel each other.
+
+---
+
+## 5. Strategy Comparison
+
+Unified ranking of all strategy candidates from this round.
+
+![Strategy comparison by net edge](figures/strategy_comparison_edge.png)
+
+![Edge vs capacity scatter](figures/strategy_comparison_scatter.png)
+
+![Sharpe ratio comparison](figures/strategy_comparison_sharpe.png)
+
+### Tier Assignments
+
+**Tier 1 — Advance to Round 4 backtesting:**
+Net edge > 2pp AND daily capacity > 5,000 contracts/day.
+
+**Tier 2 — Monitor:**
+Net edge > 0.5pp but insufficient capacity or edge for Tier 1.
+
+**Tier 3 — Reject:**
+Net edge < 0.5pp or negative after fees.
+
+---
+
+## Next Steps (Round 4)
+
+Round 4 will build an event-driven backtester to validate the top strategies
+from this round with realistic execution modeling:
+
+1. **Time-series walk-forward validation** — Train on pre-2025, test on 2025+
+2. **Position sizing** — Apply Kelly criterion with fractional sizing
+3. **Transaction cost modeling** — Spread crossing, slippage, market impact
+4. **Drawdown analysis** — Maximum peak-to-trough loss
+5. **Multi-strategy portfolio** — Correlation and combined allocation
+
+---
+
+## Appendix: Fee Structure
+
+Kalshi's quadratic fee formula:
+```
+fee_per_contract = 0.07 * fee_multiplier * price * (1 - price)
+```
+
+Where `price` is on a 0.00-1.00 scale, `0.07` is the base fee rate, and
+`fee_multiplier` is a scaling factor from the API (1.0 = standard, 0.5 = reduced).
+Maximum taker fee at 50c with standard multiplier: 1.75 cents.
+
+| Price | Fee (cents) | Fee as % of price |
+|------:|------------:|------------------:|
+| 5c | 0.33 | 6.7% |
+| 25c | 1.31 | 5.3% |
+| 50c | 1.75 | 3.5% |
+| 65c | 1.59 | 2.4% |
+| 80c | 1.12 | 1.4% |
+| 95c | 0.33 | 0.4% |
+
+**Implication:** The quadratic fee structure `P*(1-P)` means fees are highest
+near 50c and lowest at extremes, making both high-price and low-price strategies
+relatively fee-efficient.
+
+### Dataset Statistics
+
+- Total resolved markets: ~28.9M
+- Total trades: ~173M
+- Date range: 2021-06-30 to 2026-02-06
+- Dataset days: ~1,680
+
+### Methodology
+
+- **Price fields:** `_dollars` fixed-point strings converted to cents (0-100)
+- **Win rate:** Contract-weighted: `SUM(won * contracts) / SUM(contracts)`
+- **Excess return:** `win_rate - implied_probability`
+- **Net edge:** `excess_return - fee_cost`
+- **Kelly fraction:** `(win_rate * payout - loss_rate) / payout`
+- **Sharpe proxy:** Simplified binary-outcome annualized estimate
