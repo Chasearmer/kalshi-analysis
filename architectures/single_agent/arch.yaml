@@ -1,0 +1,30 @@
+name: single_agent
+type: single_agent
+description: >
+  One autonomous agent iterates through the full research loop:
+  orient, plan, implement, execute, interpret, integrate, reflect.
+  No human review between rounds. Runs until cost limit or convergence.
+
+agent:
+  model: claude-sonnet-4-5-20250929
+
+hyperparameters:
+  experiments_per_round: 3
+  max_rounds: 10
+
+limits:
+  max_cost_usd: 20.00
+  max_time_minutes: 120
+
+evaluation:
+  metrics:
+    - total_pnl_dollars
+    - sharpe
+    - max_drawdown_pct
+    - win_rate
+    - profit_factor
+    - num_strategies_found
+    - cost_usd
+    - wall_time_minutes
+  required_output:
+    - results/strategies.csv

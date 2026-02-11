@@ -1,0 +1,31 @@
+name: attractor_loop
+type: attractor
+description: >
+  Attractor graph-based pipeline. Defines the research loop as a DOT
+  digraph with orient, plan, execute, interpret, and reflect nodes.
+  The graph loops until the reflect node routes to convergence.
+
+pipeline: pipeline.dot
+
+agent:
+  model: claude-sonnet-4-5-20250929
+
+hyperparameters:
+  max_rounds: 10
+
+limits:
+  max_cost_usd: 20.00
+  max_time_minutes: 120
+
+evaluation:
+  metrics:
+    - total_pnl_dollars
+    - sharpe
+    - max_drawdown_pct
+    - win_rate
+    - profit_factor
+    - num_strategies_found
+    - cost_usd
+    - wall_time_minutes
+  required_output:
+    - results/strategies.csv

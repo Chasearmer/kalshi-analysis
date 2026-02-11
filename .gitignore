@@ -26,13 +26,15 @@ Thumbs.db
 # Agent collaboration
 .context/
 
-# Reports (generated output)
-reports/*/report.html
-reports/*/figures/
-reports/*/data/
-
-# Download state (cursor files for resumable downloads)
-data/.cursors/
-
 # Environment
 .env
+
+# Experiment runs (except the manual baseline)
+runs/*
+!runs/001_manual_review/
+
+# Comparison output
+comparison/
+
+# Download state
+problems/*/data/.cursors/

@@ -1,0 +1,16 @@
+name: manual_review
+type: manual
+description: >
+  Human-driven iterative research. An agent proposes and implements one
+  round of experiments at a time, a human reviews the results, then steers
+  the next round. Uses the .claude/skills/next-round/SKILL.md workflow.
+
+agent:
+  command: null  # Human-driven, not automated
+
+limits:
+  max_cost_usd: null
+  max_time_minutes: null
+
+evaluation:
+  source: root_project  # Special: reads TIER1_STRATEGIES from run's simulation code
