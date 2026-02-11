@@ -162,6 +162,55 @@ def trade_outcomes_with_timing_sql(data_dir: Path) -> str:
     """
 
 
+def full_trade_outcomes_with_all_dims_sql(data_dir: Path) -> str:
+    """SQL CTE for trade outcomes with all filter dimensions.
+
+    Combines category, fee_type, fee_multiplier, time_bucket, price_range,
+    and close_time into a single canonical CTE for simulation queries.
+
+    Depends on: resolved_markets, markets_with_fees CTEs.
+    Columns: ticker, taker_side, taker_price, taker_won, contracts,
+             created_time, close_time, category, fee_type, fee_multiplier,
+             time_bucket, price_range
+    """
+    return f"""
+        SELECT
+            t.ticker,
+            t.taker_side,
+            CASE WHEN t.taker_side = 'yes'
+                 THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                 ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+            END AS taker_price,
+            CASE WHEN t.taker_side = mf.result THEN 1 ELSE 0 END AS taker_won,
+            CAST(t.count_fp AS DOUBLE) AS contracts,
+            t.created_time,
+            m.close_time,
+            mf.category,
+            mf.fee_type,
+            mf.fee_multiplier,
+            CASE
+                WHEN EXTRACT(HOUR FROM CAST(t.created_time AS TIMESTAMPTZ)
+                    AT TIME ZONE 'America/New_York') BETWEEN 20 AND 23
+                THEN 'evening'
+                ELSE 'other'
+            END AS time_bucket,
+            CASE
+                WHEN (CASE WHEN t.taker_side = 'yes'
+                     THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                     ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+                END) >= 60 THEN 'high_price'
+                WHEN (CASE WHEN t.taker_side = 'yes'
+                     THEN CAST(t.yes_price_dollars AS DOUBLE) * 100
+                     ELSE CAST(t.no_price_dollars AS DOUBLE) * 100
+                END) <= 30 THEN 'low_price'
+                ELSE 'mid_price'
+            END AS price_range
+        FROM '{data_dir}/trades/*.parquet' t
+        INNER JOIN markets_with_fees mf ON t.ticker = mf.ticker
+        LEFT JOIN '{data_dir}/markets/*.parquet' m ON t.ticker = m.ticker
+    """
+
+
 def build_query(ctes: list[tuple[str, str]], select: str) -> str:
     """Compose named CTEs with a final SELECT into a complete SQL query.
 
