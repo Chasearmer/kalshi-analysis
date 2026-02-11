@@ -1,0 +1,111 @@
+digraph QuantResearch {
+  graph [
+    goal="Iteratively investigate Kalshi prediction market data through
+          hypothesis-driven research, building toward a ranked list of
+          simulated and stress-tested trading strategies"
+  ]
+  node [shape=box, timeout="3600s"]
+
+  start [shape=Mdiamond]
+  exit  [shape=Msquare]
+
+  orient [
+    label="Orient"
+    prompt="Read research/findings.md, research/open_questions.md, and
+            research/strategies.md. If round 1 and these don't exist,
+            bootstrap from brief.md — seed open_questions.md with initial
+            research directions, seed findings.md as empty. Write a summary
+            of current knowledge state to research/current_round/context.md
+            including what round this is."
+  ]
+
+  plan [
+    label="Plan"
+    prompt="Read research/current_round/context.md. Design 2-4 experiments
+            for this round, each one of:
+
+            EXPLORATION — Descriptive. What does X look like?
+            HYPOTHESIS_TEST — Falsifiable claim with a test.
+            SIMULATION — Backtest a strategy. Only when prior findings
+            justify the design.
+
+            For each: type, question, methodology, queries needed,
+            expected outputs, what each outcome would teach us.
+            Write to research/current_round/plan.md.
+
+            Early rounds should lean EXPLORATION and HYPOTHESIS_TEST.
+            SIMULATION should emerge from confirmed findings."
+  ]
+
+  run_experiments [
+    label="Run Experiments"
+    prompt="Read research/current_round/plan.md. For each experiment:
+            1. Write a Python script in research/current_round/scripts/
+            2. Run it via 'uv run python <script>'
+            3. If it fails, read the error, fix the script, run again
+            4. Iterate until it produces correct output
+            5. Save figures to research/current_round/figures/
+            6. Save data to research/current_round/data/
+
+            Query data/*.parquet via DuckDB. Use project deps: duckdb,
+            pandas, numpy, scipy, matplotlib.
+
+            Work through each experiment fully before moving to the
+            next. Do not move on until each script runs successfully
+            and produces meaningful output."
+  ]
+
+  interpret [
+    label="Interpret and Integrate"
+    prompt="Read all results, figures, and data from the current round.
+            For each experiment:
+            - What did the data show?
+            - Confirm or refute the hypothesis? By how much?
+            - What is surprising? What new questions emerge?
+            - For simulations: realistic returns, drawdown, capacity?
+            Flag potential artifacts (survivorship bias, look-ahead bias,
+            small samples).
+
+            Then update the knowledge base:
+            1. Append findings to research/findings.md with round number
+               and confidence level
+            2. Update research/open_questions.md — close answered
+               questions, add new ones
+            3. If strategies showed promise, update research/strategies.md
+               and write to results/strategies.csv
+            4. Archive current_round to research/round_NN/
+            5. Write 3-5 bullet summary to research/round_NN/summary.md"
+  ]
+
+  reflect [
+    shape=diamond
+    label="Continue?"
+    prompt="Read findings.md, open_questions.md, strategies.md, and all
+            round summaries. Evaluate:
+            - High-value open questions remaining?
+            - Recent rounds still producing new insights?
+            - Untested strategy candidates from analysis?
+            - Enough stress-tested strategies to report?
+
+            Route 'continue' if productive research remains.
+            Route 'converged' if diminishing returns or sufficient
+            strategy portfolio."
+  ]
+
+  synthesize [
+    label="Final Report"
+    prompt="Compile research/final_report.md:
+            - Research arc: what each round investigated, key findings
+            - Ranked strategy table by absolute return
+            - Per strategy: rules, return, Sharpe, drawdown, capacity
+            - Structural findings about the market
+            - Risks, caveats, recommendations
+            Output research/final_strategies.csv and
+            copy final strategies to results/strategies.csv."
+  ]
+
+  start -> orient -> plan -> run_experiments -> interpret -> reflect
+  reflect -> orient     [label="Continue", condition="outcome!=converged"]
+  reflect -> synthesize [label="Done",     condition="outcome=converged"]
+  synthesize -> exit
+}

@@ -1,0 +1,4 @@
+# Reports (generated output)
+reports/*/report.html
+reports/*/figures/
+reports/*/data/

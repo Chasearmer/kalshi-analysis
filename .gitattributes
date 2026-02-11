@@ -1,3 +1,1 @@
-data/**/*.parquet filter=lfs diff=lfs merge=lfs -text
-data/**/*.parquet.snappy filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,43 @@
+[project]
+name = "kalshi-analysis"
+version = "0.1.0"
+description = "Analyzing Kalshi's historical data to identify profit-yielding trading strategies"
+requires-python = ">=3.12"
+dependencies = [
+    "pyarrow>=18.0",
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "matplotlib>=3.9",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[project.scripts]
+kalshi-analysis = "analysis.run_round_01:main"
+kalshi-analysis-r2 = "analysis.run_round_02:main"
+kalshi-analysis-r3 = "analysis.run_round_03:main"
+kalshi-analysis-r4 = "analysis.run_round_04:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/analysis", "src/simulation", "src/util", "src/reporting"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,22 +1,7 @@
-.PHONY: install download download-series download-events download-markets download-trades test lint analysis analysis-r2 analysis-r3 analysis-r4 report report-r2 report-r3 report-r4
+.PHONY: install test lint format analysis analysis-r2 analysis-r3 analysis-r4 report report-r2 report-r3 report-r4
 
 install:
 	uv sync --all-extras
-
-download:
-	uv run kalshi-download all
-
-download-series:
-	uv run kalshi-download series
-
-download-events:
-	uv run kalshi-download events
-
-download-markets:
-	uv run kalshi-download markets
-
-download-trades:
-	uv run kalshi-download trades
 
 test:
 	uv run pytest tests/ -v

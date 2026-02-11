@@ -1,0 +1,21 @@
+[project]
+name = "kalshi-download"
+version = "0.1.0"
+description = "Data download pipeline for Kalshi prediction market data"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "pyarrow>=18.0",
+    "click>=8.1",
+]
+
+[project.scripts]
+kalshi-download = "download.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["download"]
