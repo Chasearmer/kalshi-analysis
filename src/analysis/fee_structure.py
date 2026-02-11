@@ -122,7 +122,7 @@ def run(data_dir: Path, output_dir: Path, n_bins: int = 10) -> AnalysisResult:
         ft_total = ft_df["total_contracts"].sum()
 
         if ft_total < MIN_CONTRACTS_THRESHOLD:
-            log.info("Skipping fee type '%s' (%,.0f contracts < %,d threshold)",
+            log.info("Skipping fee type '%s' (%.0f contracts < %d threshold)",
                      ft, ft_total, MIN_CONTRACTS_THRESHOLD)
             continue
 
