@@ -1,23 +1,18 @@
 """Scaffold isolated run workspaces for experiment runs."""
 
 import shutil
-from pathlib import Path
 
 import click
-import yaml
+from pathlib import Path
 
-LAB_ROOT = Path(__file__).resolve().parent.parent
-PROBLEMS_DIR = LAB_ROOT / "problems"
-ARCHITECTURES_DIR = LAB_ROOT / "architectures"
-RUNS_DIR = LAB_ROOT / "runs"
+from harness.manifest import load_architecture, write_run_manifest
+from harness.paths import PROBLEMS_DIR, RUNS_DIR
 
 
 def _next_run_number() -> int:
     """Find the next available run number."""
     existing = [
-        int(d.name.split("_")[0])
-        for d in RUNS_DIR.iterdir()
-        if d.is_dir() and d.name[0].isdigit()
+        int(d.name.split("_")[0]) for d in RUNS_DIR.iterdir() if d.is_dir() and d.name[0].isdigit()
     ]
     return max(existing, default=0) + 1
 
@@ -105,10 +100,10 @@ def create_run(arch: str, problem: str, name: str) -> Path:
     if not problem_dir.exists():
         raise click.ClickException(f"Problem not found: {problem_dir}")
 
-    arch_dir = ARCHITECTURES_DIR / arch
-    arch_file = arch_dir / "arch.yaml" if arch_dir.is_dir() else ARCHITECTURES_DIR / f"{arch}.yaml"
-    if not arch_file.exists():
-        raise click.ClickException(f"Architecture not found: {arch}")
+    try:
+        arch_file, arch_config = load_architecture(arch)
+    except FileNotFoundError as e:
+        raise click.ClickException(str(e)) from e
 
     run_num = _next_run_number()
     run_id = f"{run_num:03d}_{name}"
@@ -139,7 +134,7 @@ def create_run(arch: str, problem: str, name: str) -> Path:
         click.echo("  Copied queries scaffold -> src/util/queries.py")
 
     # Create standard directories
-    for d in ["src/analysis", "src/simulation", "tests", "results"]:
+    for d in ["src/analysis", "src/simulation", "tests", "results", "research", "logs"]:
         (run_dir / d).mkdir(parents=True, exist_ok=True)
         init = run_dir / d.split("/")[0] / "__init__.py"
         if not init.exists():
@@ -157,6 +152,17 @@ def create_run(arch: str, problem: str, name: str) -> Path:
     (run_dir / "results" / "strategies.csv").write_text(
         "strategy_name,taker_side,category,fee_type,time_bucket,price_min,price_max,confidence,rationale\n"
     )
+
+    manifest_path = write_run_manifest(
+        run_dir,
+        run_id=run_id,
+        run_name=name,
+        problem=problem,
+        architecture_name=arch,
+        architecture_source=arch_file,
+        architecture_config=arch_config,
+    )
+    click.echo(f"  Generated {manifest_path.name}")
 
     click.echo(f"\nRun workspace ready: {run_dir}")
     click.echo(f"  cd {run_dir} && uv sync --all-extras")
