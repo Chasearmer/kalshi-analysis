@@ -5,6 +5,7 @@ description = "Experiment lab for testing AI research architectures"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
+    "claude-agent-sdk>=0.1.35",
     "pyyaml>=6.0",
 ]
 
@@ -21,3 +22,7 @@ packages = ["harness"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

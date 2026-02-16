@@ -1,0 +1,45 @@
+name: ralph_loop
+type: ralph_loop
+description: >
+  A fully automated outer-loop architecture for iterative research.
+  Runs one long-lived agent session that repeatedly proposes and executes
+  new experiments until a configured stop limit is reached.
+
+agent:
+  provider: claude
+  model: claude-opus-4-6
+  permission_mode: acceptEdits
+
+execution:
+  mode: container
+  container:
+    runtime: docker
+    image: kalshi-lab-claude-runner:latest
+    network: default
+    use_bypass_permissions: true
+
+hyperparameters:
+  max_iterations: 100
+
+limits:
+  max_cost_usd: 25.00
+  max_time_minutes: 240
+  max_tokens_total: null
+  max_turns_per_iteration: 50
+
+logging:
+  capture_events: true
+  capture_tool_calls: true
+
+evaluation:
+  metrics:
+    - total_pnl_dollars
+    - sharpe
+    - max_drawdown_pct
+    - win_rate
+    - profit_factor
+    - num_strategies_found
+    - cost_usd
+    - wall_time_minutes
+  required_output:
+    - results/strategies.csv
