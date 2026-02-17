@@ -21,7 +21,7 @@ WORKER_DATA_DIR = "/workspace/data"
 DEFAULT_CONTAINER_IMAGE = "kalshi-lab-claude-runner:latest"
 PERMISSION_BYPASS = "bypassPermissions"
 ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
-AGENT_LAB_ANTHROPIC_API_KEY_ENV = "AGENT_LAB_ANTHROPIC_API_KEY"
+AGENT_LAB_ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY_KALSHI_ANALYSIS"
 RUNNER_IMAGE_FINGERPRINT_LABEL = "com.kalshi_lab.runner_fingerprint"
 RUNNER_DOCKERFILE = LAB_ROOT / "docker" / "claude-runner.Dockerfile"
 RUNNER_FINGERPRINT_INPUTS = (
@@ -195,7 +195,7 @@ def _passthrough_env_names(base_env: dict[str, str] | None = None) -> list[str]:
         if key.startswith("ANTHROPIC_"):
             keys.add(key)
 
-    # Accept AGENT_LAB_ANTHROPIC_API_KEY as an alias input variable and expose
+    # Accept ANTHROPIC_API_KEY_KALSHI_ANALYSIS as an alias input variable and expose
     # canonical ANTHROPIC_API_KEY to the containerized worker.
     if AGENT_LAB_ANTHROPIC_API_KEY_ENV in env and ANTHROPIC_API_KEY_ENV not in env:
         keys.add(ANTHROPIC_API_KEY_ENV)
