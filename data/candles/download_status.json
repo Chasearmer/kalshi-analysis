@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "total_markets": 759738,
+  "completed_markets": 759738,
+  "total_candles": 1724886,
+  "empty_markets": 0,
+  "percent_complete": 100.0,
+  "elapsed_seconds": 30045.5,
+  "eta_seconds": 0.0,
+  "markets_per_second": 12.6,
+  "requests": 377779,
+  "errors": 0,
+  "rate_limits": 0,
+  "current_ticker": "KXETHD-25JUL2709-T3809.99",
+  "started_at": "2026-02-17T17:27:29.858858",
+  "updated_at": "2026-02-18T01:48:15.365560"
+}
